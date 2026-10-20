@@ -1,0 +1,53 @@
+@startuml c2-contenedores
+' C4 - Nivel 2: Diagrama de Contenedores de DepositoClick
+' Cada contenedor corresponde a un servicio del docker-compose.yml
+!pragma layout smetana
+!include <C4/C4_Container>
+
+LAYOUT_TOP_DOWN()
+title DepositoClick - C2 Diagrama de Contenedores
+
+Person(usuarios, "Usuarios", "ADMIN, COMPRAS, OPERARIO, VENDEDOR (navegador, Swagger UI o Postman)")
+
+Container(front, "Frontend web", "React 18 + Vite, servido por nginx", "SPA: login OIDC (Authorization Code + PKCE con keycloak-js), punto de venta, stock, movimientos, compras y reposicion. Publicado en :3000")
+
+System_Ext(nager, "Nager.Date API", "Feriados nacionales por pais")
+System_Ext(argdatos, "ArgentinaDatos API", "Feriados de Argentina (respaldo)")
+
+Container(keycloak, "Keycloak", "Keycloak 26 - realm depositoclick", "Identity Provider: OIDC, emite JWT RS256 con roles de realm. Publicado en :9090")
+
+System_Boundary(sistema, "DepositoClick (zona confiable - red Docker 'backend')") {
+  Container(gateway, "API Gateway", "Spring Cloud Gateway (WebFlux), Spring Security", "Unico punto de entrada (:8080). Ruteo, Security Filter (valida JWT + reglas por rol), X-Request-Id, Swagger UI unificado.")
+  Container(catalogo, "ms-catalogo", "Spring Boot 3.5, Java 21, Spring Data JPA", "Dato maestro: rubros, categorias con atributos dinamicos, articulos y sus reglas de stock.")
+  Container(inventario, "ms-inventario", "Spring Boot 3.5, Java 21, Spring Data JPA", "Depositos, existencias por lote/vencimiento, movimientos FEFO, idempotencia, consumo.")
+  Container(comprasms, "ms-compras", "Spring Boot 3.5, Java 21, Spring Data JPA", "Proveedores, ordenes de compra, recepcion, reposicion, calendario laboral.")
+  ContainerDb(pg, "PostgreSQL 16", "1 instancia, 1 base + 1 usuario por servicio", "catalogo_db | inventario_db | compras_db")
+  Container(commons, "deposito-commons", "JAR Maven (dependencia)", "Errores comunes, conversor de roles Keycloak, RestClient con timeouts y propagacion de token.")
+}
+
+Rel(usuarios, front, "Usa la aplicacion", "HTTP")
+Rel(front, keycloak, "Login y renovacion del token", "OIDC (Auth Code + PKCE)")
+Rel(front, gateway, "nginx reenvia /api/v1/**", "HTTP/JSON + Bearer JWT")
+Rel(usuarios, gateway, "Swagger UI / Postman", "HTTP/JSON + Bearer JWT")
+
+Rel(gateway, catalogo, "/rubros /categorias /articulos", "HTTP + JWT")
+Rel(gateway, inventario, "/depositos /movimientos /stock", "HTTP + JWT")
+Rel(gateway, comprasms, "/proveedores /ordenes-compra /reposicion /calendario", "HTTP + JWT")
+Rel(gateway, keycloak, "JWKS", "HTTP")
+
+Rel(inventario, catalogo, "Reglas de stock del articulo", "RestClient + JWT propagado")
+Rel(comprasms, catalogo, "Valida articulos (reglas de stock)", "RestClient + JWT propagado")
+Rel(comprasms, inventario, "Deposito, ingreso por recepcion, resumen de consumo", "RestClient + JWT propagado")
+Rel(comprasms, nager, "Feriados del pais", "HTTPS/JSON")
+Rel(comprasms, argdatos, "Feriados AR (fallback)", "HTTPS/JSON")
+
+Rel(catalogo, pg, "catalogo_db", "JDBC")
+Rel(inventario, pg, "inventario_db", "JDBC")
+Rel(comprasms, pg, "compras_db", "JDBC")
+
+Rel(catalogo, keycloak, "JWKS", "HTTP")
+Rel(inventario, keycloak, "JWKS", "HTTP")
+Rel(comprasms, keycloak, "JWKS", "HTTP")
+
+SHOW_LEGEND()
+@enduml

@@ -1,0 +1,90 @@
+{
+  "realm": "depositoclick",
+  "displayName": "DepositoClick",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "accessTokenLifespan": 1800,
+  "ssoSessionIdleTimeout": 3600,
+  "roles": {
+    "realm": [
+      { "name": "ADMIN", "description": "Administra catalogo, depositos, proveedores y ajustes de inventario" },
+      { "name": "COMPRAS", "description": "Gestiona proveedores, ordenes de compra y reposicion" },
+      { "name": "OPERARIO", "description": "Personal de deposito: ingresos, egresos, transferencias y recepciones" },
+      { "name": "VENDEDOR", "description": "Punto de venta: consulta stock y registra ventas" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "depositoclick-client",
+      "name": "DepositoClick (clientes: Swagger UI, Postman, front)",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "http://localhost:8088/*",
+        "http://localhost:3000/*",
+        "http://localhost:5173/*",
+        "https://oauth.pstmn.io/v1/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://localhost:8088",
+        "http://localhost:3000",
+        "http://localhost:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ana",
+      "lastName": "Administradora",
+      "email": "admin1@depositoclick.local",
+      "credentials": [ { "type": "password", "value": "admin123", "temporary": false } ],
+      "realmRoles": [ "ADMIN", "default-roles-depositoclick" ]
+    },
+    {
+      "username": "compras1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Carlos",
+      "lastName": "Compras",
+      "email": "compras1@depositoclick.local",
+      "credentials": [ { "type": "password", "value": "compras123", "temporary": false } ],
+      "realmRoles": [ "COMPRAS", "default-roles-depositoclick" ]
+    },
+    {
+      "username": "operario1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Olga",
+      "lastName": "Operaria",
+      "email": "operario1@depositoclick.local",
+      "credentials": [ { "type": "password", "value": "operario123", "temporary": false } ],
+      "realmRoles": [ "OPERARIO", "default-roles-depositoclick" ]
+    },
+    {
+      "username": "vendedor1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Victor",
+      "lastName": "Vendedor",
+      "email": "vendedor1@depositoclick.local",
+      "credentials": [ { "type": "password", "value": "vendedor123", "temporary": false } ],
+      "realmRoles": [ "VENDEDOR", "default-roles-depositoclick" ]
+    }
+  ]
+}

@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>DepósitoClick - Decisiones de diseño</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.3pt; line-height: 1.45; color: #1d1d1f; }
+  h1 { font-size: 22pt; margin: 0 0 4px; color: #0b3d6e; }
+  h2 { font-size: 14.5pt; color: #0b3d6e; border-bottom: 2px solid #0b3d6e; padding-bottom: 3px; margin-top: 26px; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; color: #134f8a; margin: 16px 0 6px; page-break-after: avoid; }
+  p { margin: 5px 0 7px; text-align: justify; }
+  ul, ol { margin: 4px 0 8px; padding-left: 20px; }
+  li { margin: 2px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 9.2pt; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  th, td { border: 1px solid #b9c4d0; padding: 4px 6px; vertical-align: top; text-align: left; }
+  th { background: #e6edf5; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; background: #f1f3f5; padding: 0 3px; border-radius: 2px; }
+  pre { font-family: Consolas, monospace; font-size: 8.6pt; background: #f4f6f8; border: 1px solid #d5dbe1; padding: 7px 9px; white-space: pre-wrap; page-break-inside: avoid; }
+  .portada { text-align: center; padding-top: 70mm; page-break-after: always; }
+  .portada .sub { font-size: 13pt; color: #444; margin: 6px 0; }
+  .portada .datos { margin-top: 40mm; font-size: 11pt; }
+  .figura { text-align: center; margin: 10px 0 14px; page-break-inside: avoid; }
+  .figura img { max-width: 100%; border: 1px solid #ccd; }
+  .figura .pie { font-size: 8.8pt; color: #555; margin-top: 3px; }
+  .nota { background: #fff8e1; border-left: 4px solid #f0b400; padding: 6px 10px; margin: 8px 0; page-break-inside: avoid; }
+  .decision { background: #eef5ec; border-left: 4px solid #3c8c3c; padding: 6px 10px; margin: 8px 0; page-break-inside: avoid; }
+  .salto { page-break-before: always; }
+  .indice li { margin: 1px 0; }
+  .peq { font-size: 8.8pt; }
+</style>
+</head>
+<body>
+
+<div class="portada">
+  <h1>DepósitoClick — PoS</h1>
+  <div class="sub">Decisiones de diseño, deconstrucción del dominio y arquitectura</div>
+  <div class="sub">Trabajo Práctico Integrador · Backend de Aplicaciones 2026 · UTN FRC</div>
+  <div class="datos">
+    <p style="text-align:center">Integrante: <b>400677 — Martino Lautaro Emanuel</b></p>
+    <p style="text-align:center">Java 21 · Spring Boot 3.5 · Spring Cloud Gateway · Spring Data JPA · Spring Security · Keycloak · PostgreSQL · React · Docker Compose</p>
+  </div>
+</div>
+
+<h2>Índice</h2>
+<ol class="indice">
+  <li>El problema y el dominio elegido</li>
+  <li>Deconstrucción del dominio (actores, procesos, información, reglas)</li>
+  <li>Versión final del dominio (ampliado)</li>
+  <li>Arquitectura: diagramas C4 (C1 y C2)</li>
+  <li>División en microservicios</li>
+  <li>Colaboración entre microservicios</li>
+  <li>Integración con APIs públicas externas</li>
+  <li>Identidad, autenticación, autorización y zona confiable</li>
+  <li>Componente común reutilizable (deposito-commons)</li>
+  <li>Persistencia</li>
+  <li>APIs REST, validaciones, errores y documentación</li>
+  <li>Organización interna de cada microservicio</li>
+  <li>Contenerización y despliegue</li>
+  <li>Pruebas realizadas</li>
+  <li>Resumen de decisiones, alternativas y consecuencias</li>
+  <li>Limitaciones conocidas y trabajo futuro</li>
+  <li>Anexo: endpoints y usuarios</li>
+</ol>
+
+<!-- =============================================================== -->
+<h2>1. El problema y el dominio elegido</h2>
+<p>El enunciado pide <i>“un software capaz de controlar el stock de un depósito, polimórfico en el sentido de
+poder utilizarse en cualquier rubro de negocio y seguir siendo funcional, accesible mediante OAuth2, e
+integrando de forma inteligente alguna API pública externa”</i>. El nombre del proyecto es <b>DepósitoClick — PoS</b>
+(<i>Point of Sale</i>), así que además del depósito se contempla el punto de venta como consumidor del stock.</p>
+<p>Leído con atención, el enunciado deja tres desafíos de fondo:</p>
+<ol>
+  <li><b>Polimorfismo de rubro.</b> Una ferretería vende cable por metro y tornillos por kilo; un almacén vende leche
+  por unidad, que además vence; una farmacia necesita trazar el lote de cada caja; una tienda de ropa no tiene
+  vencimientos pero sí talles y colores. El sistema no puede tener esas reglas “programadas” para un rubro: tiene
+  que poder <b>configurarlas</b>.</li>
+  <li><b>Stock confiable.</b> Nunca negativo, sin duplicaciones, con historia de cada movimiento y sin despachar
+  mercadería vencida.</li>
+  <li><b>Una API externa que aporte algo real.</b> El ejemplo de tipo de cambio queda explícitamente descartado.
+  Se buscó un dato que el sistema <b>no puede</b> tener como configuración propia y del que dependa una regla de
+  negocio (ver sección 7: feriados nacionales por país).</li>
+</ol>
+
+<!-- =============================================================== -->
+<h2>2. Deconstrucción del dominio</h2>
+
+<h3>2.1 Contexto general</h3>
+<p>Un negocio (de cualquier rubro) tiene uno o más depósitos, posiblemente en distintos países. En los depósitos
+se guarda mercadería que entra por compras a proveedores (o por stock inicial, devoluciones) y sale por ventas en
+el punto de venta, consumo interno, roturas, vencimientos o transferencias a otro depósito. Periódicamente hay que
+decidir qué reponer, a qué proveedor y en qué cantidad, sabiendo que cada proveedor tarda cierta cantidad de
+<b>días hábiles</b> en entregar.</p>
+
+<h3>2.2 Actores</h3>
+<table>
+  <tr><th>Actor</th><th>Rol en Keycloak</th><th>Qué hace</th></tr>
+  <tr><td>Administrador</td><td><code>ADMIN</code></td><td>Define rubros, categorías (con sus atributos y si controlan lote/vencimiento) y artículos; da de alta depósitos; realiza ajustes por inventario físico. Puede todo.</td></tr>
+  <tr><td>Responsable de compras</td><td><code>COMPRAS</code></td><td>Gestiona proveedores y sus precios, crea y emite órdenes de compra, consulta y aplica la reposición sugerida.</td></tr>
+  <tr><td>Operario de depósito</td><td><code>OPERARIO</code></td><td>Registra ingresos, egresos por cualquier motivo, transferencias y la recepción física de las órdenes de compra.</td></tr>
+  <tr><td>Vendedor / caja (PoS)</td><td><code>VENDEDOR</code></td><td>Consulta el catálogo (incluso por código de barras) y el stock, y registra egresos por <b>venta</b> (solo venta).</td></tr>
+  <tr><td>Keycloak</td><td>sistema externo</td><td>Identity Provider: autentica usuarios y emite los JWT.</td></tr>
+  <tr><td>APIs de feriados</td><td>sistema externo</td><td>Nager.Date (principal, +100 países) y ArgentinaDatos (respaldo para AR).</td></tr>
+</table>
+
+<h3>2.3 Procesos principales</h3>
+<ol>
+  <li><b>Configuración del catálogo polimórfico:</b> rubro → categoría (atributos dinámicos tipados + política de lote/vencimiento) → artículo (SKU, código de barras, unidad de medida, stock mínimo, valores de atributos).</li>
+  <li><b>Ingreso de mercadería</b> (stock inicial, devolución de cliente, compra).</li>
+  <li><b>Egreso / venta en el PoS</b> con selección automática de lote FEFO (<i>First Expired, First Out</i>).</li>
+  <li><b>Transferencia entre depósitos</b> conservando lote y vencimiento.</li>
+  <li><b>Ajuste por inventario físico</b> (se informa lo contado, el sistema calcula la diferencia).</li>
+  <li><b>Compra:</b> orden en borrador → emisión (con fecha de entrega en días hábiles del país del depósito) → recepciones parciales/totales que ingresan stock → recibida (o cancelada).</li>
+  <li><b>Reposición:</b> con stock, consumo, stock mínimo, lo ya pedido y el plazo real del proveedor se sugiere qué y cuánto pedir, y se pueden generar las órdenes en borrador.</li>
+  <li><b>Consultas:</b> stock consolidado, por lote, bajo mínimo, próximos vencimientos, historial de movimientos.</li>
+</ol>
+
+<h3>2.4 Información relevante</h3>
+<ul>
+  <li><b>Maestra:</b> rubros, categorías, definición de atributos, artículos, depósitos (con país), proveedores (CUIT, plazo de entrega), artículos que vende cada proveedor y su precio.</li>
+  <li><b>Transaccional:</b> existencias (depósito + artículo + lote, con vencimiento y cantidad), movimientos (historia inmutable), operaciones registradas (idempotencia), órdenes de compra, detalles y recepciones.</li>
+  <li><b>Externa:</b> feriados nacionales por país y año (cacheados localmente).</li>
+  <li><b>Auditoría:</b> usuario (del JWT) y fecha de cada movimiento, orden y recepción.</li>
+</ul>
+
+<h3>2.5 Reglas de negocio identificadas</h3>
+<table>
+  <tr><th>#</th><th>Regla</th><th>Dónde vive</th></tr>
+  <tr><td>R1</td><td>Los atributos de un artículo deben respetar la definición de su categoría: obligatorios presentes, sin atributos desconocidos, valores del tipo correcto (TEXTO, NUMERO, ENTERO, FECHA, BOOLEANO, OPCION).</td><td>catálogo</td></tr>
+  <tr><td>R2</td><td>SKU único e inmutable; código de barras GTIN (8/12/13/14) con dígito verificador válido y único.</td><td>catálogo</td></tr>
+  <tr><td>R3</td><td>La unidad de medida de un artículo no se puede cambiar (el stock existente quedaría expresado en otra unidad). Las unidades discretas (UNIDAD, PAR, CAJA) no admiten cantidades fraccionarias.</td><td>catálogo / inventario / compras</td></tr>
+  <tr><td>R4</td><td>Una categoría que controla vencimiento debe controlar lote. No se puede agregar un atributo obligatorio a una categoría que ya tiene artículos.</td><td>catálogo</td></tr>
+  <tr><td>R5</td><td>Si la categoría controla lote/vencimiento, todo ingreso debe informarlos; si no, no se aceptan. Un mismo lote tiene siempre el mismo vencimiento (en todos los depósitos).</td><td>inventario</td></tr>
+  <tr><td>R6</td><td>No se ingresa mercadería vencida o que vence hoy. Un artículo dado de baja no puede recibir stock (pero sí liquidarse lo que quedó).</td><td>inventario</td></tr>
+  <tr><td>R7</td><td>El stock nunca queda negativo. Los egresos se despachan por FEFO. Lo vencido no se despacha, salvo un egreso con motivo VENCIMIENTO (que solo toma lo vencido).</td><td>inventario</td></tr>
+  <tr><td>R8</td><td>Cada operación tiene una referencia única: si se repite, no se vuelve a aplicar (idempotencia). Un ingreso por COMPRA exige referencia.</td><td>inventario</td></tr>
+  <tr><td>R9</td><td>El VENDEDOR solo registra egresos por VENTA. Los ajustes son solo de ADMIN y requieren justificación.</td><td>inventario / gateway</td></tr>
+  <tr><td>R10</td><td>No se da de baja un depósito con stock, ni un proveedor con órdenes pendientes de recepción.</td><td>inventario / compras</td></tr>
+  <tr><td>R11</td><td>CUIT de proveedor con dígito verificador válido (módulo 11).</td><td>compras</td></tr>
+  <tr><td>R12</td><td>Una orden solo puede incluir artículos activos que el proveedor vende; los precios por defecto son los pactados.</td><td>compras</td></tr>
+  <tr><td>R13</td><td>Fecha estimada de entrega = emisión + <i>lead time</i> del proveedor en <b>días hábiles del país del depósito destino</b> (sin fines de semana ni feriados nacionales). Una fecha de entrega solicitada debe ser hábil y alcanzable.</td><td>compras + API externa</td></tr>
+  <tr><td>R14</td><td>Ciclo de vida de la orden: BORRADOR → EMITIDA → RECIBIDA_PARCIAL → RECIBIDA; se cancela solo si no se recibió nada. No se recibe más de lo pendiente.</td><td>compras</td></tr>
+  <tr><td>R15</td><td>Reposición: punto de pedido = consumo diario × días corridos hasta la entrega + stock mínimo; se considera lo ya pedido (órdenes en camino) para no pedir dos veces.</td><td>compras</td></tr>
+</table>
+
+<h3>2.6 Responsabilidades del backend</h3>
+<p>Mantener el dato maestro del catálogo; llevar el saldo de stock por lote y su historia; garantizar atomicidad,
+concurrencia (bloqueo optimista) e idempotencia de los movimientos; gestionar el ciclo de compras; calcular plazos
+y reposición; autenticar y autorizar cada operación según el rol; exponer todo como API REST documentada.</p>
+
+<h3>2.7 Información que se obtiene de sistemas externos</h3>
+<ul>
+  <li><b>Keycloak:</b> identidad del usuario y sus roles (dentro del JWT) y las claves públicas para validar la firma (JWKS).</li>
+  <li><b>Nager.Date / ArgentinaDatos:</b> feriados nacionales del país de cada depósito, por año.</li>
+</ul>
+
+<!-- =============================================================== -->
+<h2>3. Versión final del dominio (ampliado)</h2>
+<p><b>DepósitoClick</b> es el backend de control de stock de un negocio de <b>cualquier rubro</b> que opera
+<b>uno o más depósitos, eventualmente en distintos países</b>. El <b>catálogo</b> se organiza en rubros y categorías; cada
+categoría define qué <b>atributos</b> describen a sus artículos (por ejemplo talle y color para remeras, droga y
+receta para medicamentos, sección para cables) y si su stock se controla por <b>lote</b> y por <b>vencimiento</b>.
+Cada artículo tiene un SKU inmutable, un código de barras opcional (validado), una <b>unidad de medida</b> (unidad,
+par, caja, kilogramo, litro, metro, metro cuadrado — las tres primeras solo admiten cantidades enteras) y un
+<b>stock mínimo</b>. Los artículos se dan de baja de forma lógica.</p>
+<p>El <b>inventario</b> lleva, por depósito, artículo y lote, la cantidad existente y su vencimiento. Toda variación
+se hace mediante <b>operaciones</b> (ingreso, egreso, transferencia, ajuste) identificadas por una referencia única,
+que generan <b>movimientos</b> inmutables con el usuario que los realizó. Los egresos eligen los lotes por FEFO y
+jamás despachan mercadería vencida (la baja por vencimiento es un egreso especial). El punto de venta consulta por
+código de barras y registra ventas; esas ventas alimentan el <b>consumo promedio</b> de cada artículo.</p>
+<p><b>Compras</b> administra los <b>proveedores</b> (CUIT, plazo de entrega en días hábiles) y qué artículos vende cada
+uno a qué precio (uno puede marcarse como proveedor preferido). Las <b>órdenes de compra</b> se crean en borrador, se
+emiten —momento en que se calcula la fecha de entrega con el <b>calendario laboral del país del depósito</b>, armado
+con feriados obtenidos de una API pública—, se reciben en una o varias <b>recepciones</b> que ingresan el stock al
+inventario (con lote y vencimiento) y terminan recibidas o canceladas. Finalmente, el módulo de <b>reposición</b>
+combina stock disponible, consumo, stock mínimo, órdenes en camino y plazos reales para sugerir qué pedir y a quién,
+y puede generar las órdenes en borrador por proveedor.</p>
+<p>Los usuarios se autentican en <b>Keycloak</b> y operan con uno de cuatro roles: ADMIN, COMPRAS, OPERARIO y VENDEDOR.</p>
+
+<p class="nota"><b>Ampliaciones respecto del enunciado</b> (todas justificadas por el problema): multi-depósito y
+multi-país; lotes, vencimientos y FEFO; idempotencia de operaciones; módulo de compras con recepciones parciales;
+reposición sugerida; punto de venta con búsqueda por código de barras; auditoría por usuario.</p>
+
+<!-- =============================================================== -->
+<h2 class="salto">4. Arquitectura: diagramas C4</h2>
+<h3>4.1 C1 — Diagrama de Contexto</h3>
+<div class="figura"><img src="diagramas/c1-contexto.png" style="max-height:175mm"><div class="pie">Figura 1 — C1. Fuente PlantUML: docs/diagramas/c1-contexto.puml</div></div>
+
+<h3 class="salto">4.2 C2 — Diagrama de Contenedores</h3>
+<div class="figura"><img src="diagramas/c2-contenedores.png" style="max-height:215mm"><div class="pie">Figura 2 — C2. Cada contenedor es un servicio del docker-compose.yml (deposito-commons no es un proceso: es la librería que va dentro de cada servicio). Fuente: docs/diagramas/c2-contenedores.puml</div></div>
+
+<table>
+  <tr><th>Contenedor</th><th>Tecnología</th><th>Responsabilidad</th><th>Expuesto</th></tr>
+  <tr><td>Frontend web</td><td>React 18 + Vite, nginx</td><td>Interfaz para los 4 roles; login OIDC con keycloak-js; nginx reenvía <code>/api</code> al gateway</td><td>Sí (3000)</td></tr>
+  <tr><td>API Gateway</td><td>Spring Cloud Gateway 2025.0 (WebFlux) + Spring Security reactivo</td><td>Único punto de entrada, ruteo, Security Filter, traza X-Request-Id, errores de infraestructura, Swagger UI unificado</td><td>Sí (8080)</td></tr>
+  <tr><td>ms-catalogo</td><td>Spring Boot 3.5 (MVC), JPA</td><td>Dato maestro de artículos y sus reglas</td><td>No</td></tr>
+  <tr><td>ms-inventario</td><td>Spring Boot 3.5 (MVC), JPA</td><td>Depósitos, existencias, movimientos</td><td>No</td></tr>
+  <tr><td>ms-compras</td><td>Spring Boot 3.5 (MVC), JPA, RestClient</td><td>Proveedores, órdenes, recepción, reposición, calendario laboral</td><td>No</td></tr>
+  <tr><td>PostgreSQL 16</td><td>1 instancia</td><td>Una base y un usuario por microservicio</td><td>No</td></tr>
+  <tr><td>Keycloak 26</td><td>realm <code>depositoclick</code></td><td>Identity Provider (OIDC, JWT RS256)</td><td>Sí (9090)</td></tr>
+  <tr><td>Nager.Date / ArgentinaDatos</td><td>APIs públicas (Internet)</td><td>Feriados</td><td>Fuera de la infraestructura</td></tr>
+</table>
+
+<!-- =============================================================== -->
+<h2>5. División en microservicios</h2>
+<p>El criterio fue separar por <b>responsabilidad funcional y por dueño del dato</b> (cada pieza de información tiene
+un único servicio que la puede modificar), no por entidad ni por CRUD:</p>
+<table>
+  <tr><th>Servicio</th><th>Es dueño de</th><th>Pregunta que responde</th><th>Frecuencia de cambio</th></tr>
+  <tr><td><b>ms-catalogo</b></td><td>rubros, categorías, atributos, artículos</td><td>¿Qué es este artículo y cómo se controla su stock?</td><td>Baja (configuración)</td></tr>
+  <tr><td><b>ms-inventario</b></td><td>depósitos, existencias, movimientos, operaciones</td><td>¿Cuánto hay, dónde, de qué lote, y qué pasó?</td><td>Muy alta (cada venta)</td></tr>
+  <tr><td><b>ms-compras</b></td><td>proveedores, precios, órdenes, recepciones, calendario</td><td>¿Qué, cuánto, a quién y cuándo comprar?</td><td>Media</td></tr>
+</table>
+<p>Las tres responsabilidades tienen ritmos y usuarios distintos: el catálogo lo configura un administrador cada
+tanto; el inventario recibe tráfico constante del punto de venta y es el que conviene escalar; compras es una
+función de negocio separada (otro usuario, otras reglas, integración externa). Además el grafo de dependencias es
+<b>acíclico</b>: catálogo no depende de nadie; inventario depende de catálogo; compras depende de catálogo e inventario.</p>
+
+<h3>Alternativas consideradas</h3>
+<ul>
+  <li><b>Monolito modular:</b> más simple de operar, pero no cumple la restricción del TPI y mezcla el ritmo del PoS con el del catálogo.</li>
+  <li><b>Dos servicios (catálogo+inventario | compras):</b> el catálogo quedaría acoplado al despliegue del servicio más cargado, y el “polimorfismo” (reglas configurables) se diluiría dentro del inventario.</li>
+  <li><b>Un servicio por entidad (artículos, depósitos, movimientos, proveedores…):</b> sería “dividir CRUDs”, lo que el enunciado desaconseja; además rompería transacciones naturales (un egreso toca existencias y movimientos atómicamente).</li>
+  <li><b>Un servicio de “alertas/reposición” aparte:</b> se descartó; la reposición es una decisión de compras y necesita sus datos (proveedores, plazos, órdenes en camino).</li>
+</ul>
+<p><b>Consecuencias:</b> hay llamadas remotas en procesos que en un monolito serían locales, así que hubo que diseñar
+timeouts, manejo de caídas, idempotencia y copias locales de lectura (secciones 6 y 10).</p>
+
+<!-- =============================================================== -->
+<h2>6. Colaboración entre microservicios</h2>
+<p>Toda la comunicación interna es <b>síncrona, HTTP/JSON con RestClient</b> (el cliente recomendado por la cátedra
+para Spring MVC), siempre con <b>timeouts</b> (2 s de conexión, 5 s de lectura) y <b>propagando el JWT del usuario</b>
+que originó la operación. Cada servicio define sus <b>propios DTOs</b> para lo que consume (por ejemplo
+<code>ReglasArticuloRemoto</code>, con la unidad como <code>String</code> y no como el enum del catálogo), de modo que
+un cambio interno en otro servicio no lo rompe. El cliente distingue tres casos: <b>404 = “no existe”</b> (respuesta válida),
+<b>caído/timeout/5xx = “no pude preguntar”</b> (<code>ServicioNoDisponibleException</code>, 503) y <b>respuesta inesperada</b>
+(<code>ErrorRemotoException</code>, 502). Los 4xx de otro servicio se traducen leyendo su <code>ErrorResponse</code>, con lo
+que el usuario ve el motivo original (ej.: “ms-inventario: El artículo LAC-002 se controla por lote: debe informar el lote”).</p>
+
+<h3>6.1 Proceso: movimiento de stock (inventario → catálogo)</h3>
+<table>
+  <tr><th>Inicia</th><td>ms-inventario, al recibir un ingreso/egreso/transferencia/ajuste.</td></tr>
+  <tr><th>Necesita</th><td>Las reglas del artículo: si existe, si está activo, unidad (¿decimales?), si controla lote y vencimiento, stock mínimo. <code>GET /api/v1/articulos/{id}/reglas-stock</code> (contrato pensado para esto).</td></tr>
+  <tr><th>Conserva</th><td>Inventario decide <i>cómo</i> se mueve el stock (FEFO, negativos, vencidos, idempotencia). El catálogo solo informa reglas: nunca sabe cuánto stock hay.</td></tr>
+  <tr><th>Si no responde</th><td><b>Modo degradado</b>: inventario guarda una <b>copia local (snapshot)</b> de las reglas de cada artículo cada vez que el catálogo responde. Si el catálogo está caído, se opera con esa copia <b>solo si tiene menos de 24 h</b> (configurable) y la respuesta incluye una advertencia. Sin copia reciente → 503 (preferimos no mover stock con reglas que no podemos verificar). Probado en el despliegue real (sección 14).</td></tr>
+</table>
+
+<h3>6.2 Proceso: recepción de una orden de compra (compras → inventario → catálogo)</h3>
+<div class="figura"><img src="diagramas/secuencia-recepcion.png" style="max-height:150mm"><div class="pie">Figura 3 — Secuencia de la recepción. Fuente: docs/diagramas/secuencia-recepcion.puml</div></div>
+<table>
+  <tr><th>Inicia</th><td>ms-compras (<code>POST /ordenes-compra/{id}/recepciones</code>, rol OPERARIO o ADMIN).</td></tr>
+  <tr><th>Necesita</th><td>Que inventario registre el ingreso (motivo COMPRA) con lote y vencimiento; inventario a su vez consulta al catálogo.</td></tr>
+  <tr><th>Conserva</th><td>Compras: estado de la orden y cantidades pendientes (no se recibe más de lo pedido). Inventario: validación de lote/vencimiento/unidad y el stock. Compras <b>no duplica</b> reglas de lote: si faltan, el 422 de inventario se propaga tal cual.</td></tr>
+  <tr><th>Si no responde</th><td>Compras no guarda nada y responde 503 (“La recepción NO se registró; puede reintentarla sin riesgo de duplicar stock”). La referencia es determinística (<code>OC-{id}-REC-{n}</code>, con n = recepciones ya registradas + 1): si inventario sí aplicó el ingreso pero la respuesta se perdió, el reintento usa la misma referencia y inventario devuelve el resultado original con <code>repetida=true</code> en lugar de sumar stock otra vez. Dos recepciones simultáneas de la misma orden chocan en el <code>@Version</code> de la orden (409).</td></tr>
+</table>
+<p class="nota">Alternativas evaluadas para la consistencia entre servicios: <b>2PC/XA</b> (descartado: complejo y acopla disponibilidad),
+<b>Saga con mensajería</b> (más robusto ante caídas largas, pero requiere un broker y escapa al alcance de la materia), y la elegida:
+<b>llamada síncrona + idempotencia por referencia + orden de commit</b> (primero el servicio dueño del stock, después el registro
+local). La consecuencia es que, si compras se cayera justo después de que inventario aplicó el ingreso y nadie reintenta, quedaría
+stock ingresado sin recepción registrada; la operación <code>GET /movimientos/operaciones/OC-x-REC-n</code> permite detectarlo y el
+reintento lo corrige.</p>
+
+<h3>6.3 Proceso: creación de una orden (compras → inventario + catálogo)</h3>
+<p>Compras verifica con inventario que el depósito destino exista y esté activo (y obtiene su <b>país</b>, que define el calendario), y con
+catálogo que cada artículo exista, esté activo y respete la unidad. Además verifica con sus propios datos que el proveedor venda ese
+artículo. Si cualquiera de los dos servicios no responde → 503 y no se crea nada.</p>
+
+<h3>6.4 Proceso: reposición (compras → inventario + catálogo + API externa)</h3>
+<p>Es el proceso que más información cruza: inventario aporta stock disponible y consumo promedio diario
+(<code>GET /stock/resumen-reposicion</code>, ventas + consumo interno de los últimos N días); catálogo aporta stock mínimo, unidad y
+si el artículo sigue activo (una sola llamada en lote, <code>GET /articulos/reglas-stock?ids=…</code>, para evitar N llamadas);
+compras aporta proveedor preferido (o el más barato), plazo, precio y lo ya pedido en órdenes en camino; la API de feriados permite
+pasar el plazo de días hábiles a <b>días corridos</b> (el consumo ocurre todos los días, el proveedor solo entrega en días hábiles).
+Cada sugerencia incluye una explicación en texto (“…el proveedor tarda 2 días hábiles = 4 días corridos (incluye feriados: …)”).
+<b>Inventario no decide cuánto comprar</b> y <b>compras no calcula stock</b>: cada uno responde por lo suyo.</p>
+
+<h3>6.5 Decisiones para mantener independencia</h3>
+<ul>
+  <li>Sin base de datos compartida (cada servicio solo accede a la suya) y sin clases de dominio compartidas.</li>
+  <li>Contratos explícitos y mínimos pensados para el consumidor (<code>reglas-stock</code>, <code>resumen-reposicion</code>).</li>
+  <li>Copias de lectura de lo justo y necesario (SKU y nombre en existencias y detalles de orden, snapshot de reglas en inventario, país del depósito en la orden) para no depender del otro servicio en cada lectura.</li>
+  <li>Dependencias en un solo sentido (sin ciclos): por eso el catálogo <b>no</b> le pregunta a inventario si hay stock antes de dar de baja un artículo; la baja es lógica y el artículo inactivo simplemente no puede recibir stock ni comprarse.</li>
+</ul>
+
+<!-- =============================================================== -->
+<h2>7. Integración con APIs públicas externas: calendario laboral</h2>
+<h3>7.1 Por qué se necesita externamente</h3>
+<p>Los proveedores pactan plazos en <b>días hábiles</b>. Para saber cuándo llega un pedido (y por lo tanto cuánto stock
+hay que tener para cubrir la espera) hay que saber qué días son feriados <b>en el país del depósito</b>. Ese dato no se puede
+guardar como configuración: cambia todos los años (Carnaval y Semana Santa son móviles), en Argentina hay feriados
+<i>trasladables</i> y “puentes turísticos” que se fijan por decreto, y cada país tiene los suyos (el sistema es multi-país:
+los datos de ejemplo tienen un depósito en Córdoba y otro en Montevideo). Mantenerlo a mano sería frágil y propenso a errores.</p>
+
+<h3>7.2 Qué proceso depende de ella</h3>
+<ul>
+  <li><b>Emisión de una orden de compra:</b> fecha estimada de entrega (R13) y validación de la fecha solicitada (“la fecha 2026-11-23 no es un día hábil en AR: es feriado (Día de la Soberanía Nacional)”).</li>
+  <li><b>Reposición:</b> conversión del plazo a días corridos para el punto de pedido (R15). Con un fin de semana largo de por medio, el punto de pedido sube y el sistema sugiere pedir antes y más.</li>
+  <li>Se expone además <code>GET /calendario/feriados</code> y <code>GET /calendario/fecha-entrega</code> para que el usuario vea el cálculo.</li>
+</ul>
+
+<h3>7.3 Cómo se integra y qué información se usa</h3>
+<ul>
+  <li><b>Fuente principal: Nager.Date</b> — <code>GET https://date.nager.at/api/v3/PublicHolidays/{año}/{país}</code>. Gratuita, sin API key, +100 países. Se usan <code>date</code>, <code>localName</code> y <code>global</code>: solo se consideran los feriados <b>nacionales</b> (<code>global=true</code>), porque uno provincial no frena una entrega en todo el país.</li>
+  <li><b>Respaldo para Argentina: ArgentinaDatos</b> — <code>GET https://api.argentinadatos.com/v1/feriados/{año}</code> (incluye puentes turísticos).</li>
+  <li>Cliente <code>RestClient</code> “externo” de deposito-commons: timeouts de 3 s/5 s y <b>sin</b> propagar nuestro token (a un tercero nunca se le manda la credencial del usuario).</li>
+  <li><b>Caché persistente</b> en <code>compras_db</code> (tablas <code>feriados</code> y <code>calendarios_descargados</code>) válida por 7 días; se guarda en una transacción propia (<code>REQUIRES_NEW</code>) para no perderla si la operación que la pidió falla.</li>
+</ul>
+
+<h3>7.4 Qué pasa si no está disponible o responde algo inesperado</h3>
+<table>
+  <tr><th>Paso</th><th>Situación</th><th>Comportamiento</th></tr>
+  <tr><td>1</td><td>Hay caché de menos de 7 días</td><td>Se usa sin llamar a Internet.</td></tr>
+  <tr><td>2</td><td>Nager responde bien</td><td>Se usa y se cachea (fuente NAGER_DATE).</td></tr>
+  <tr><td>—</td><td>Nager responde 404 (país desconocido)</td><td>No es una falla: se calculan solo fines de semana y se avisa “la API no tiene información del país”.</td></tr>
+  <tr><td>3</td><td>Nager caído, timeout, 5xx, JSON inválido, lista vacía o fechas de otro año</td><td>La respuesta se descarta (una respuesta 200 no alcanza: se valida el contenido) y, si el país es AR, se usa ArgentinaDatos.</td></tr>
+  <tr><td>4</td><td>Ninguna API disponible pero hay caché vieja</td><td>Se usa la caché vencida y se avisa la fecha de descarga.</td></tr>
+  <tr><td>5</td><td>Nada disponible</td><td>Se descuentan solo sábados y domingos; la orden queda con <code>calendarioConfiable=false</code> y la respuesta incluye la advertencia “la fecha podría ser anterior a la real”.</td></tr>
+</table>
+<p><b>Decisión:</b> que la falla de la API externa <b>no bloquee</b> la operación de compras (degradar en lugar de fallar), pero
+dejando registrado de qué fuente salió el cálculo (<code>fuenteCalendario</code>) y si es confiable. La alternativa de devolver 503
+se descartó porque la API es un tercero sobre el que no tenemos control y su indisponibilidad no debería frenar la operatoria.</p>
+
+<!-- =============================================================== -->
+<h2>8. Identidad, autenticación, autorización y zona confiable</h2>
+<h3>8.1 Esquema</h3>
+<ul>
+  <li><b>Keycloak 26</b> como Identity Provider, realm <code>depositoclick</code>, importado automáticamente al levantar (keycloak/depositoclick-realm.json) con 4 <b>roles de realm</b> y 4 usuarios de prueba.</li>
+  <li>Cliente <code>depositoclick-client</code> <b>público</b> (no hay secreto que proteger en un front/Swagger) con <i>Authorization Code + PKCE</i> (para un front real) y <i>Direct Access Grants</i> (password, para Swagger/Postman/pruebas, como en el Apunte 21).</li>
+  <li><b>OpenID Connect</b>: los clientes obtienen el token en el endpoint OIDC de Keycloak; el backend recibe <b>JWT firmados con RS256</b>.</li>
+  <li>Gateway y microservicios son <b>Resource Servers</b> (Spring Security OAuth2): validan firma (claves públicas JWKS), emisor (<code>iss</code>) y vencimiento.</li>
+  <li>Roles: claim <code>realm_access.roles</code> → <code>ROLE_X</code> con <code>KeycloakRolesConverter</code> (deposito-commons), que además toma <code>preferred_username</code> como nombre del usuario para auditoría.</li>
+</ul>
+
+<h3>8.2 Matriz de permisos</h3>
+<table class="peq">
+  <tr><th>Operación</th><th>ADMIN</th><th>COMPRAS</th><th>OPERARIO</th><th>VENDEDOR</th></tr>
+  <tr><td>Consultar catálogo, stock, depósitos, movimientos, calendario</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+  <tr><td>ABM de rubros, categorías, artículos, depósitos</td><td>✔</td><td></td><td></td><td></td></tr>
+  <tr><td>Egreso por VENTA</td><td>✔</td><td></td><td>✔</td><td>✔</td></tr>
+  <tr><td>Egreso por otro motivo, ingresos, transferencias</td><td>✔</td><td></td><td>✔</td><td></td></tr>
+  <tr><td>Ajuste por inventario físico</td><td>✔</td><td></td><td></td><td></td></tr>
+  <tr><td>Consultar proveedores y órdenes</td><td>✔</td><td>✔</td><td>✔</td><td></td></tr>
+  <tr><td>ABM proveedores, crear/emitir/cancelar órdenes, reposición</td><td>✔</td><td>✔</td><td></td><td></td></tr>
+  <tr><td>Recepción de mercadería</td><td>✔</td><td></td><td>✔</td><td></td></tr>
+</table>
+
+<h3>8.3 Zona confiable y Security Filter del Gateway</h3>
+<ul>
+  <li>En Docker <b>solo se publican</b> el frontend (3000), el gateway (8080) y Keycloak (9090). Microservicios y PostgreSQL no tienen puertos en el host: solo se alcanzan por la red interna <code>backend</code>. Los clientes no conocen la topología interna.</li>
+  <li>El gateway tiene un <b>SecurityWebFilterChain</b> (Spring Security reactivo) que es el primer control: JWT válido, al menos un rol de DepósitoClick, reglas gruesas por ruta (reposición solo ADMIN/COMPRAS, ajustes solo ADMIN, compras no visible para VENDEDOR) y <b><code>denyAll()</code> para cualquier ruta no expuesta</b> (por ejemplo <code>/actuator/env</code>).</li>
+  <li><b>Defensa en profundidad:</b> cada microservicio vuelve a validar el JWT y aplica las reglas finas (que un VENDEDOR solo pueda vender se controla en inventario, porque depende del cuerpo de la petición). Si alguien llegara a un servicio salteando el gateway, igual necesita un token válido.</li>
+  <li><b>Llamadas entre servicios:</b> se <b>propaga el token del usuario</b> (interceptor de RestClient, como propone la clase 09). Alternativa considerada: <i>Client Credentials</i> (token propio de cada servicio). Se eligió propagar porque la operación sigue siendo “del usuario”: inventario puede auditar quién hizo el ingreso y verificar sus permisos (un VENDEDOR no podría provocar un ingreso a través de compras). Consecuencia: los procesos largos dependen de que el token no venza (30 min).</li>
+  <li><b>Emisor dentro de Docker:</b> el usuario pide el token a <code>localhost:9090</code> pero los servicios ven a Keycloak como <code>keycloak:9090</code>. Se configuró <code>KC_HOSTNAME=http://localhost:9090</code> (el <code>iss</code> siempre es el mismo) y en los servicios <code>issuer-uri</code> (para validar el emisor) + <code>jwk-set-uri</code> interno (para bajar las claves). Así se valida el emisor sin depender de la URL pública dentro de la red.</li>
+  <li>Sesiones <b>stateless</b> y CSRF deshabilitado (no hay cookies de sesión: la credencial es el Bearer token).</li>
+</ul>
+
+<!-- =============================================================== -->
+<h2>9. Componente común reutilizable: <code>deposito-commons</code></h2>
+<p>Artefacto Maven independiente (<code>ar.edu.utn.frc.bda:deposito-commons:1.0.0</code>), instalado en el <code>.m2</code> con
+<code>mvn install</code> y referenciado como dependencia en el <code>pom.xml</code> de los <b>tres microservicios y del gateway</b>.
+Sus dependencias son <code>provided</code>: no impone versiones ni arrastra librerías (el gateway, que no tiene Spring MVC, lo usa sin problemas).
+En Docker, la etapa de build hace exactamente lo mismo: <code>mvn install</code> del commons y luego <code>package</code> del servicio.</p>
+<table>
+  <tr><th>Se compartió</th><th>Por qué es verdaderamente común</th></tr>
+  <tr><td>Jerarquía de excepciones (<code>RecursoNoEncontrado</code> 404, <code>ReglaNegocio</code> 422, <code>Conflicto</code> 409, <code>ServicioNoDisponible</code> 503, <code>ErrorRemoto</code> 502) + <code>GlobalExceptionHandler</code> + <code>ErrorResponse</code></td><td>Todos los servicios deben responder errores con el mismo formato y semántica; además, al ser un contrato común, un servicio puede leer el error de otro y propagar su mensaje.</td></tr>
+  <tr><td><code>KeycloakRolesConverter</code> y <code>Roles</code></td><td>La política de identidad es transversal: si cambia el claim de roles se cambia en un solo lugar (lo usan también el gateway reactivo).</td></tr>
+  <tr><td><code>RestClientSoporte</code>, <code>PropagarTokenInterceptor</code>, <code>LogLlamadasInterceptor</code></td><td>Garantiza que ninguna llamada salga sin timeouts ni log, y fija la regla “token solo a servicios internos”.</td></tr>
+  <tr><td><code>UsuarioActual</code>, <code>PaginaResponse</code></td><td>Utilidades sin lógica de negocio.</td></tr>
+</table>
+<p><b>Deliberadamente NO se compartió:</b> entidades, repositorios, servicios ni DTOs de dominio. Si inventario usara la clase
+<code>Articulo</code> del catálogo, cada cambio del catálogo obligaría a recompilar y redesplegar inventario (acoplamiento de
+despliegue) y se borraría la frontera de “dueño del dato”. Cada consumidor define su propia vista (<code>ReglasArticuloRemoto</code>).
+Tampoco la configuración de seguridad por rutas: cada servicio conoce sus propias reglas. Consecuencia: algo de duplicación en DTOs
+remotos y en <code>OpenApiConfig</code>, aceptada a cambio de independencia.</p>
+
+<!-- =============================================================== -->
+<h2>10. Persistencia</h2>
+<ul>
+  <li><b>Una instancia de PostgreSQL 16, una base y un usuario por microservicio</b> (<code>catalogo_db</code>, <code>inventario_db</code>, <code>compras_db</code>; script <code>db/init.sql</code> con <code>REVOKE ALL … FROM PUBLIC</code>). Un servicio no puede ni leer las tablas de otro. Es un punto medio entre una base compartida (simple pero acopla esquemas) y un motor por servicio (más aislamiento pero más recursos para un TPI). Si un servicio necesitara escalar su base, se separa sin tocar a los otros.</li>
+  <li>Spring Data JPA + Hibernate, repositorios <code>JpaRepository</code> con consultas derivadas, <code>@Query</code> JPQL, proyecciones (consumo por artículo) y un <b>repositorio custom con EntityManager</b> para la búsqueda de movimientos con filtros opcionales (patrón del Apunte 16).</li>
+  <li><code>ddl-auto=update</code> para que el despliegue sea reproducible sin pasos manuales (en producción se usaría Flyway/Liquibase).</li>
+  <li><b>Integridad y concurrencia:</b> restricciones únicas (SKU, código de barras, CUIT, depósito+artículo+lote, referencia de operación); <code>@Version</code> en existencias y órdenes (si dos cajas venden la última unidad a la vez, una recibe 409); todas las operaciones de stock son <code>@Transactional</code> (todo o nada).</li>
+  <li><b>Historia inmutable:</b> el saldo (existencias) solo cambia a través de movimientos, que guardan cantidad, saldo resultante, usuario, fecha y referencia.</li>
+  <li>Cantidades <code>BigDecimal(14,3)</code> para soportar kilos/metros sin errores de punto flotante; precios <code>(14,2)</code>.</li>
+  <li>H2 en memoria solo para tests y para el perfil <code>h2</code> de desarrollo.</li>
+</ul>
+
+<!-- =============================================================== -->
+<h2>11. APIs REST, validaciones, errores y documentación</h2>
+<ul>
+  <li>Convenciones del Apunte 14: prefijo versionado <code>/api/v1</code>, sustantivos en plural, minúsculas y kebab-case (<code>/ordenes-compra</code>, <code>/reglas-stock</code>), camelCase en parámetros, filtros por query string y paginación (<code>pagina</code>, <code>tamanio</code>, máx. 100).</li>
+  <li>Verbos: GET (seguro), POST crear (201 + header <code>Location</code>), PUT reemplazo, DELETE baja (204), PATCH reactivación. Las transiciones de estado se modelan como <b>sub-recursos que se crean</b>: <code>POST …/emision</code>, <code>…/recepciones</code>, <code>…/cancelacion</code>, porque cada una es un hecho del negocio con reglas propias.</li>
+  <li>Códigos coherentes: 200, 201, 204; 400 (formato/validación de entrada, con detalle por campo), 401, 403, 404, 409 (duplicados, estado inválido, concurrencia), 422 (reglas de negocio), 502, 503 (dependencia caída), 504 (timeout en gateway). <b>Idempotencia visible:</b> repetir una operación con la misma referencia devuelve <b>200</b> con <code>repetida=true</code> en lugar de 201.</li>
+  <li>Validación de entrada con Bean Validation (<code>@Valid</code>, <code>@NotNull</code>, <code>@Positive</code>, <code>@Digits</code>, <code>@Pattern</code>, <code>@Email</code>, <code>@FutureOrPresent</code>, <code>@Validated</code> para parámetros) y reglas de negocio en la capa de servicio.</li>
+  <li>Formato de error único (<code>ErrorResponse</code>): <code>timestamp, status, error, mensaje, path, detalles</code>; el gateway responde sus propios errores (servicio caído, timeout) con el mismo formato.</li>
+  <li><b>OpenAPI/Swagger</b> con springdoc generado del código real (anotaciones <code>@Operation</code>, <code>@ApiResponses</code>, <code>@Tag</code>, <code>@Schema</code> con ejemplos). Cada servicio publica <code>/v3/api-docs</code>; el gateway los expone en <code>/docs/{servicio}</code> y sirve un <b>Swagger UI unificado</b> con selector de servicio, cuyo “server” es el propio gateway y que permite autenticarse contra Keycloak (OAuth2 password) o pegar un Bearer token.</li>
+</ul>
+<div class="figura"><img src="img/swagger.png" style="max-height:110mm"><div class="pie">Figura 4 — Swagger UI unificado en el gateway (definición “Compras”), capturado del despliegue real.</div></div>
+
+<!-- =============================================================== -->
+<h2>12. Organización interna de cada microservicio</h2>
+<p>Se siguió la arquitectura en capas de los Apuntes 15 y 17, con la estructura de paquetes sugerida por la cátedra:</p>
+<pre>ar.edu.utn.frc.bda.depositoclick.inventario
+├── controllers   → @RestController: mapean HTTP, @Valid, ResponseEntity con el status correcto (sin lógica)
+├── services      → @Service @Transactional: reglas de negocio (MovimientoService, StockService, ReglasArticuloService)
+├── repositories  → JpaRepository, @Query, proyecciones, repositorio custom con EntityManager
+├── models        → @Entity (Lombok), enums del dominio
+├── dtos          → request/response de la API (nunca se exponen entidades)
+├── clients       → RestClient hacia otros servicios / APIs externas + DTOs remotos propios
+└── config        → SecurityConfig, OpenApiConfig, RestClientConfig, DatosIniciales</pre>
+<p>Inyección por constructor (<code>@RequiredArgsConstructor</code>), beans de configuración con <code>@Value</code>,
+<code>CommandLineRunner</code> para datos de ejemplo, y las excepciones de negocio del commons manejadas por el
+<code>@RestControllerAdvice</code> global.</p>
+
+<!-- =============================================================== -->
+<h2>13. Contenerización y despliegue</h2>
+<ul>
+  <li>Un <b>Dockerfile multi-stage</b> por componente (Maven + Temurin 21 para compilar; <code>eclipse-temurin:21-jre</code> para ejecutar). El contexto es la raíz del proyecto para poder instalar primero <code>deposito-commons</code> en el <code>.m2</code> del build.</li>
+  <li><b>docker-compose.yml</b> levanta todo con un comando: PostgreSQL (con script de inicialización), Keycloak (con import del realm), los 3 microservicios y el gateway. Healthchecks en PostgreSQL y Keycloak; los servicios arrancan cuando ambos están listos.</li>
+  <li>Dos redes: <code>frontend</code> (gateway y Keycloak) y <code>backend</code> (todo lo interno). Configuración por variables de entorno (URLs internas por nombre de servicio, credenciales de cada base, issuer/JWKS, URLs de las APIs públicas). Zona horaria de los contenedores en America/Argentina/Cordoba (las fechas de vencimiento y los días hábiles dependen del “hoy”).</li>
+  <li>Puerto publicado del gateway configurable (<code>GATEWAY_PORT</code>, por defecto 8080).</li>
+  <li>La arquitectura del C2 se corresponde 1 a 1 con los servicios del compose; las APIs públicas quedan fuera.</li>
+</ul>
+
+<h3>13.1 Frontend web</h3>
+<p>El TPI se centra en el backend, pero se agregó una interfaz básica en <b>React 18 + Vite</b> para poder usar la
+aplicación con los cuatro roles sin herramientas técnicas (Swagger/Postman siguen disponibles). Decisiones:</p>
+<ul>
+  <li><b>Autenticación con <code>keycloak-js</code> y Authorization Code + PKCE</b> (<code>onLoad: 'login-required'</code>): el usuario se
+  loguea en la pantalla de Keycloak y el front nunca ve la contraseña (a diferencia del grant <i>password</i>, que queda solo para pruebas).
+  El token se renueva automáticamente (<code>updateToken(30)</code>) antes de cada llamada y se envía como <code>Bearer</code>. El cierre de
+  sesión invalida la sesión en Keycloak.</li>
+  <li><b>Mismo origen, sin CORS:</b> en Docker, el nginx que sirve la SPA reenvía <code>/api/</code> al API Gateway por la red interna (en
+  desarrollo lo hace el proxy de Vite). El gateway sigue siendo el único punto de entrada a los microservicios y aplica todas las reglas
+  de seguridad.</li>
+  <li><b>El menú y las pantallas se adaptan al rol</b> (claim <code>realm_access.roles</code>): un VENDEDOR solo ve Punto de venta, Stock y
+  Catálogo. Es solo usabilidad: la autorización real la hacen el gateway y los microservicios.</li>
+  <li><b>Pantallas:</b> Inicio (stock bajo mínimo y vencimientos), Punto de venta (búsqueda por código de barras o SKU, ticket, lotes
+  despachados por FEFO), Stock, Catálogo (el alta arma los campos según los atributos de la categoría elegida), Movimientos (ingreso,
+  egreso, transferencia, ajuste e historial; los campos de lote/vencimiento aparecen solo si el artículo los controla), Órdenes de compra
+  (crear, emitir, recibir, cancelar) y Reposición (sugerencias y generación de borradores).</li>
+  <li>Los errores se muestran con el <code>mensaje</code> del <code>ErrorResponse</code> común, así el usuario ve la regla de negocio que
+  falló (ej.: “Stock insuficiente de LAC-001…”).</li>
+</ul>
+<div class="figura"><img src="img/front-catalogo.png" style="max-height:120mm"><div class="pie">Figura 5 — Alta de artículo: los atributos se generan desde la definición de la categoría (Medicamentos: droga y requiereReceta, controla lote y vencimiento).</div></div>
+<div class="figura"><img src="img/front-venta.png" style="max-height:85mm"><div class="pie">Figura 6 — Punto de venta: venta registrada con los lotes despachados por FEFO.</div></div>
+
+<!-- =============================================================== -->
+<h2>14. Pruebas realizadas</h2>
+<table>
+  <tr><th>Tipo</th><th>Qué cubre</th><th>Resultado</th></tr>
+  <tr><td>Unitarias + integración por servicio (<code>mvn verify</code>, H2 + JWT simulado con spring-security-test, Mockito para servicios remotos y APIs externas)</td><td>commons (3): conversión de roles. catálogo (12): validadores GTIN y de atributos, permisos, 400/409/422. inventario (6): FEFO, stock insuficiente, lote/vencimiento/decimales, idempotencia, VENDEDOR solo vende, catálogo caído con y sin copia local, transferencias. compras (14): días hábiles con feriados, cadena de respaldo de APIs, respuesta inesperada, país desconocido, CUIT, ciclo de la orden, inventario caído, fecha en fin de semana, permisos, reposición. gateway (5): 401, 403 sin rol, 403 por ruta, denyAll, 503 con servicio caído.</td><td><b>40/40 OK</b></td></tr>
+  <tr><td>Punta a punta sobre el despliegue Docker real (<code>scripts/demo.sh</code>: Keycloak real, PostgreSQL, gateway, APIs públicas)</td><td>Seguridad, catálogo polimórfico, stock inicial, idempotencia, ventas FEFO, transferencia, ajuste, feriados AR/UY, ciclo de compra completo (parcial + total) y reposición con generación de borradores.</td><td><b>35/35 pasos OK</b></td></tr>
+  <tr><td>Frontend en navegador automatizado (Chrome + puppeteer)</td><td>Redirección al login de Keycloak y vuelta, menú según rol (VENDEDOR y ADMIN), venta por código de barras y por SKU, artículo inexistente, logout, alta de artículo con atributos dinámicos, reposición, órdenes y movimientos; sin errores de JavaScript.</td><td>OK</td></tr>
+  <tr><td>Resiliencia manual (apagando contenedores)</td><td>Inventario caído → recepción 503 sin cambios y reintento exitoso al volver; gateway → 503 propio; catálogo caído → venta con copia local + advertencia, y 503 para artículo sin copia.</td><td>Comportamiento esperado</td></tr>
+</table>
+
+<!-- =============================================================== -->
+<h2>15. Resumen de decisiones, alternativas y consecuencias</h2>
+<table class="peq">
+  <tr><th>Decisión</th><th>Alternativas consideradas</th><th>Por qué</th><th>Consecuencias</th></tr>
+  <tr><td>Polimorfismo por <b>datos</b> (categorías con atributos tipados y política de lote/vencimiento)</td><td>Herencia de entidades por rubro; columnas JSON libres</td><td>Un rubro nuevo no requiere código; la validación sigue siendo estricta</td><td>Los atributos se guardan como texto validado (filtrar por atributo es menos eficiente)</td></tr>
+  <tr><td>3 microservicios por dueño del dato</td><td>Monolito, 2 servicios, 1 por entidad</td><td>Responsabilidades y ritmos distintos, dependencias acíclicas</td><td>Llamadas remotas: timeouts, degradación, idempotencia</td></tr>
+  <tr><td>Comunicación síncrona REST (RestClient)</td><td>Mensajería (RabbitMQ/Kafka), WebClient</td><td>Lo visto en la materia; procesos que necesitan respuesta inmediata</td><td>Acoplamiento temporal, mitigado con timeouts, snapshot y reintentos seguros</td></tr>
+  <tr><td>Idempotencia por referencia en inventario</td><td>Confiar en que no haya reintentos; 2PC</td><td>Permite reintentar ante timeouts sin duplicar stock</td><td>Tabla adicional y referencias determinísticas</td></tr>
+  <tr><td>Copia local de reglas del artículo (≤ 24 h)</td><td>Fallar siempre; cachear para siempre</td><td>El PoS sigue vendiendo si el catálogo se cae un rato</td><td>Ventana en la que un cambio del catálogo no se vería</td></tr>
+  <tr><td>FEFO automático y bloqueo de vencidos</td><td>FIFO, lote siempre manual</td><td>Reduce pérdidas por vencimiento; el cajero no elige lote</td><td>Lógica de selección más compleja</td></tr>
+  <tr><td>Feriados por país vía API + caché + respaldo + degradación</td><td>Tabla manual; API de tipo de cambio; fallar si la API no responde</td><td>Dato cambiante, multi-país, imprescindible para plazos</td><td>Dependencia de terceros, mitigada y transparente (fuente/confiable)</td></tr>
+  <tr><td>Keycloak + JWT validado en gateway y en cada servicio</td><td>Validar solo en el gateway; sesiones; API keys</td><td>Defensa en profundidad, estándar OIDC</td><td>Configuración de issuer/JWKS dentro de Docker</td></tr>
+  <tr><td>Propagación del token del usuario</td><td>Client Credentials</td><td>Auditoría y permisos del usuario real en toda la cadena</td><td>Procesos atados a la vigencia del token</td></tr>
+  <tr><td>Una base por servicio en un mismo PostgreSQL</td><td>Base compartida; un motor por servicio</td><td>Aislamiento real con bajo costo</td><td>Un único motor como punto de falla</td></tr>
+  <tr><td>Commons solo con lo transversal</td><td>Compartir entidades/DTOs</td><td>Evitar acoplamiento de despliegue</td><td>Algo de duplicación de DTOs remotos</td></tr>
+  <tr><td>Swagger UI unificado en el gateway</td><td>Un Swagger por servicio expuesto</td><td>No exponer la topología; un solo lugar para probar</td><td>El gateway rutea también la documentación</td></tr>
+</table>
+
+<!-- =============================================================== -->
+<h2>16. Limitaciones conocidas y trabajo futuro</h2>
+<ul>
+  <li>Sin HTTPS en el despliegue local (en producción, TLS en el gateway y en Keycloak).</li>
+  <li>Sin <i>rate limiting</i> ni <i>circuit breaker</i> (Resilience4j) — hoy se resuelve con timeouts y degradación explícita.</li>
+  <li>La consistencia entre compras e inventario es “eventual con reintento manual”; una saga con mensajería lo haría automático.</li>
+  <li>Esquema con <code>ddl-auto=update</code>; migraciones versionadas con Flyway.</li>
+  <li>Keycloak en modo <code>start-dev</code> (base embebida); en producción con su propia base y realm versionado.</li>
+  <li>Reservas de stock (pedidos de clientes) y precios de venta quedan fuera del alcance.</li>
+</ul>
+
+<!-- =============================================================== -->
+<h2>17. Anexo: endpoints y usuarios</h2>
+<table class="peq">
+  <tr><th>Servicio</th><th>Endpoints (todos bajo <code>http://localhost:8080</code>)</th></tr>
+  <tr><td>ms-catalogo</td><td>
+    <code>GET/POST /api/v1/rubros</code>, <code>GET/PUT/DELETE /api/v1/rubros/{id}</code><br>
+    <code>GET/POST /api/v1/categorias</code>, <code>GET/DELETE /api/v1/categorias/{id}</code>, <code>POST /api/v1/categorias/{id}/atributos</code><br>
+    <code>GET/POST /api/v1/articulos</code>, <code>GET/PUT/DELETE /api/v1/articulos/{id}</code>, <code>PATCH /api/v1/articulos/{id}/reactivacion</code><br>
+    <code>GET /api/v1/articulos/sku/{sku}</code>, <code>GET /api/v1/articulos/codigo-barras/{codigo}</code><br>
+    <code>GET /api/v1/articulos/{id}/reglas-stock</code>, <code>GET /api/v1/articulos/reglas-stock?ids=</code></td></tr>
+  <tr><td>ms-inventario</td><td>
+    <code>GET/POST /api/v1/depositos</code>, <code>GET/PUT/DELETE /api/v1/depositos/{id}</code><br>
+    <code>POST /api/v1/movimientos/ingresos | egresos | transferencias | ajustes</code><br>
+    <code>GET /api/v1/movimientos</code> (filtros + paginado), <code>GET /api/v1/movimientos/operaciones/{referencia}</code><br>
+    <code>GET /api/v1/stock</code>, <code>/stock/articulos/{id}</code>, <code>/stock/bajo-minimo</code>, <code>/stock/vencimientos</code>, <code>/stock/resumen-reposicion</code></td></tr>
+  <tr><td>ms-compras</td><td>
+    <code>GET/POST /api/v1/proveedores</code>, <code>GET/PUT/DELETE /api/v1/proveedores/{id}</code>, <code>GET/POST /api/v1/proveedores/{id}/articulos</code>, <code>DELETE …/articulos/{articuloId}</code><br>
+    <code>GET/POST /api/v1/ordenes-compra</code>, <code>GET /api/v1/ordenes-compra/{id}</code>, <code>POST …/{id}/emision | recepciones | cancelacion</code><br>
+    <code>GET /api/v1/reposicion/sugerencias</code>, <code>POST /api/v1/reposicion/ordenes-borrador</code><br>
+    <code>GET /api/v1/calendario/feriados</code>, <code>GET /api/v1/calendario/fecha-entrega</code></td></tr>
+  <tr><td>Infraestructura</td><td>Aplicación web: <code>http://localhost:3000</code> · Swagger UI: <code>/swagger-ui.html</code> · Keycloak: <code>http://localhost:9090</code> (admin/admin) · Token: <code>POST /realms/depositoclick/protocol/openid-connect/token</code></td></tr>
+</table>
+<p>Usuarios: <code>admin1/admin123</code> (ADMIN), <code>compras1/compras123</code> (COMPRAS), <code>operario1/operario123</code> (OPERARIO), <code>vendedor1/vendedor123</code> (VENDEDOR).
+Datos de ejemplo: 4 rubros, 6 categorías, 8 artículos, 2 depósitos (DEP-CBA en Argentina, DEP-MVD en Uruguay) y 5 proveedores.</p>
+<p>Puesta en marcha: <code>docker compose up -d --build</code> y luego <code>bash scripts/demo.sh</code> (ver README.md).</p>
+
+</body>
+</html>

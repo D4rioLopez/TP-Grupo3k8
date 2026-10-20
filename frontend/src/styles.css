@@ -1,0 +1,116 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+  color: #1f2933;
+  background: #f3f5f8;
+}
+
+.cargando { padding: 40px; text-align: center; }
+
+/* ---- barra superior ---- */
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 10px 20px;
+  background: #0b3d6e;
+  color: white;
+}
+.marca { font-weight: bold; font-size: 18px; }
+.barra nav { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
+.barra nav a {
+  color: #d6e4f3;
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+.barra nav a:hover { background: #134f8a; }
+.barra nav a.active { background: white; color: #0b3d6e; }
+.usuario { display: flex; align-items: center; gap: 10px; }
+.usuario small { color: #b5cbe2; }
+
+.contenido { padding: 20px; max-width: 1250px; margin: 0 auto; }
+
+h1 { font-size: 22px; color: #0b3d6e; margin: 6px 0 14px; }
+h2 { font-size: 17px; color: #134f8a; margin: 18px 0 8px; }
+h3 { font-size: 15px; margin: 12px 0 6px; }
+
+/* ---- formularios ---- */
+label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: #3e4c59; }
+input, select {
+  padding: 6px 8px;
+  border: 1px solid #b8c4d0;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+}
+input:focus, select:focus { outline: 2px solid #4c8fd6; border-color: #4c8fd6; }
+table input, table select { width: 100%; min-width: 90px; }
+
+button, .boton {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 4px;
+  background: #1666b8;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: none;
+  display: inline-block;
+}
+button:hover, .boton:hover { background: #0f528f; }
+button:disabled { background: #9db3c8; cursor: not-allowed; }
+button.secundario { background: #e3e9ef; color: #1f2933; }
+button.secundario:hover { background: #cfd8e1; }
+button.peligro { background: #c0392b; }
+button.peligro:hover { background: #962d22; }
+button.chico { padding: 3px 8px; font-size: 12px; }
+
+.filtros { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
+.filtros .ancho { flex: 1; min-width: 280px; }
+.grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.grilla.datos div { background: white; padding: 8px 10px; border-radius: 4px; border: 1px solid #dde3e9; }
+.acciones { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+
+.panel {
+  background: white;
+  border: 1px solid #dde3e9;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+/* ---- tablas ---- */
+table { width: 100%; border-collapse: collapse; background: white; margin: 8px 0 12px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid #e4e9ee; text-align: left; vertical-align: top; }
+th { background: #e8eef5; font-weight: 600; font-size: 13px; }
+td.num { text-align: right; white-space: nowrap; }
+tr.inactivo td { color: #8a96a3; }
+.paginado { display: flex; gap: 12px; align-items: center; }
+
+/* ---- mensajes y etiquetas ---- */
+.mensaje { padding: 8px 12px; border-radius: 4px; margin: 8px 0; }
+.mensaje.error { background: #fdecea; color: #8a1f15; border-left: 4px solid #c0392b; }
+.mensaje.ok { background: #e8f5e9; color: #1d5e20; border-left: 4px solid #2e7d32; }
+.mensaje.aviso { background: #fff8e1; color: #6b4e00; border-left: 4px solid #f0b400; }
+.texto-error { color: #c0392b; }
+.campo-error { border-color: #c0392b; }
+
+.etiqueta { padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #e3e9ef; }
+.etiqueta.roja, .etiqueta.cancelada { background: #fdecea; color: #a12b1f; }
+.etiqueta.borrador { background: #eceff1; color: #455a64; }
+.etiqueta.emitida { background: #e3f0fc; color: #0f528f; }
+.etiqueta.recibida_parcial { background: #fff3cd; color: #7a5a00; }
+.etiqueta.recibida { background: #e8f5e9; color: #1d5e20; }
+
+.tarjetas { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.tarjeta { background: white; border: 1px solid #dde3e9; border-radius: 6px; padding: 14px 18px; min-width: 200px; }
+.tarjeta .numero { font-size: 30px; font-weight: bold; color: #0b3d6e; }
+
+.pestanias { display: flex; gap: 4px; border-bottom: 2px solid #c9d4df; margin-bottom: 4px; }
+.pestanias button { background: #e3e9ef; color: #1f2933; border-radius: 4px 4px 0 0; }
+.pestanias button.activa { background: #1666b8; color: white; }

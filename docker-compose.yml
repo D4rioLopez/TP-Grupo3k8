@@ -1,0 +1,156 @@
+# DepositoClick - despliegue integral
+#   docker compose up -d --build
+#
+# Zona confiable: SOLO se publican al host el API Gateway (8080) y Keycloak (9090, para obtener tokens).
+# Los microservicios y PostgreSQL no tienen puertos publicados: solo se alcanzan dentro de la red "backend".
+
+name: depositoclick
+
+x-java-env: &java-env
+  TZ: America/Argentina/Cordoba
+  JAVA_TOOL_OPTIONS: "-Duser.timezone=America/Argentina/Cordoba -XX:MaxRAMPercentage=70"
+  # los tokens los emite Keycloak con iss=http://localhost:9090/... (la URL que ve el usuario)
+  KEYCLOAK_ISSUER: http://localhost:9090/realms/depositoclick
+  # pero las claves publicas se bajan por la red interna
+  KEYCLOAK_JWK_URI: http://keycloak:9090/realms/depositoclick/protocol/openid-connect/certs
+  OPENAPI_SERVER_URL: http://localhost:${GATEWAY_PORT:-8080}
+  OPENAPI_TOKEN_URL: http://localhost:9090/realms/depositoclick/protocol/openid-connect/token
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: dc-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: America/Argentina/Cordoba
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    container_name: dc-keycloak
+    command: ["start-dev", "--import-realm", "--http-port=9090"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # el emisor (iss) de los tokens es siempre localhost:9090, aunque se pida desde adentro de Docker
+      KC_HOSTNAME: http://localhost:9090
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/depositoclick-realm.json:/opt/keycloak/data/import/depositoclick-realm.json:ro
+    ports:
+      - "9090:9090"
+    healthcheck:
+      # la imagen de Keycloak no trae curl: usamos /dev/tcp de bash contra el puerto de management (9000)
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks: [backend, frontend]
+
+  ms-catalogo:
+    build:
+      context: .
+      dockerfile: ms-catalogo/Dockerfile
+    image: depositoclick/ms-catalogo:1.0.0
+    container_name: dc-ms-catalogo
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:postgresql://postgres:5432/catalogo_db
+      DB_USER: catalogo
+      DB_PASSWORD: catalogo123
+    depends_on:
+      postgres: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    networks: [backend]
+
+  ms-inventario:
+    build:
+      context: .
+      dockerfile: ms-inventario/Dockerfile
+    image: depositoclick/ms-inventario:1.0.0
+    container_name: dc-ms-inventario
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:postgresql://postgres:5432/inventario_db
+      DB_USER: inventario
+      DB_PASSWORD: inventario123
+      CATALOGO_URL: http://ms-catalogo:8081
+    depends_on:
+      postgres: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    networks: [backend]
+
+  ms-compras:
+    build:
+      context: .
+      dockerfile: ms-compras/Dockerfile
+    image: depositoclick/ms-compras:1.0.0
+    container_name: dc-ms-compras
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:postgresql://postgres:5432/compras_db
+      DB_USER: compras
+      DB_PASSWORD: compras123
+      CATALOGO_URL: http://ms-catalogo:8081
+      INVENTARIO_URL: http://ms-inventario:8082
+      # APIs publicas (fuera de la infraestructura, por Internet)
+      NAGER_URL: https://date.nager.at
+      ARGENTINADATOS_URL: https://api.argentinadatos.com
+    depends_on:
+      postgres: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    networks: [backend]
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    image: depositoclick/api-gateway:1.0.0
+    container_name: dc-api-gateway
+    environment:
+      <<: *java-env
+      CATALOGO_URL: http://ms-catalogo:8081
+      INVENTARIO_URL: http://ms-inventario:8082
+      COMPRAS_URL: http://ms-compras:8083
+    ports:
+      # si el 8080 del host esta ocupado:  GATEWAY_PORT=8088 docker compose up -d
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      keycloak: { condition: service_healthy }
+      ms-catalogo: { condition: service_started }
+      ms-inventario: { condition: service_started }
+      ms-compras: { condition: service_started }
+    networks: [backend, frontend]
+
+  frontend:
+    build:
+      context: ./frontend
+    image: depositoclick/frontend:1.0.0
+    container_name: dc-frontend
+    ports:
+      # app web: http://localhost:3000 (nginx reenvia /api al gateway)
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - api-gateway
+    networks: [frontend]
+
+networks:
+  # red de "afuera": frontend, gateway y keycloak
+  frontend:
+  # red interna: microservicios, base de datos, keycloak y gateway
+  backend:
+
+volumes:
+  pgdata:

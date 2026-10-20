@@ -1,0 +1,8 @@
+**/target
+materiales
+docs
+scripts
+**/.idea
+**/*.iml
+**/.vscode
+.git

@@ -1,0 +1,45 @@
+@startuml secuencia-recepcion
+!pragma layout smetana
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+title Recepcion de una orden de compra (POST /api/v1/ordenes-compra/{id}/recepciones)
+
+actor "Operario" as op
+participant "API Gateway" as gw
+participant "ms-compras" as co
+participant "ms-inventario" as inv
+participant "ms-catalogo" as cat
+database "compras_db" as cdb
+database "inventario_db" as idb
+
+op -> gw : POST /recepciones + Bearer JWT
+gw -> gw : Security Filter: firma, emisor, vencimiento,\nrol ADMIN u OPERARIO
+gw -> co : reenvia (mismo Authorization)
+co -> co : valida JWT y rol (defensa en profundidad)
+co -> cdb : orden + detalles (@Version)
+co -> co : estado EMITIDA/RECIBIDA_PARCIAL?\ncantidad <= pendiente?
+co -> inv : POST /movimientos/ingresos\nmotivo COMPRA, referencia OC-{id}-REC-{n}\n(token del operario propagado)
+inv -> idb : referencia ya procesada?
+alt referencia nueva
+  loop por articulo
+    inv -> cat : GET /articulos/{id}/reglas-stock
+    cat --> inv : unidad, lote, vencimiento, activo
+  end
+  inv -> inv : valida lote / vencimiento / decimales
+  inv -> idb : existencias + movimientos (una transaccion)
+  inv --> co : 201 OperacionResponse
+else referencia repetida (reintento)
+  inv --> co : 200 repetida=true (no duplica stock)
+end
+co -> cdb : recepcion + cantidades + estado (commit)
+co --> gw : 201 OrdenResponse
+gw --> op : 201
+
+note over co, inv
+  Si ms-inventario no responde (caido / timeout):
+  ms-compras NO guarda nada y responde 503.
+  Al reintentar, n no avanzo -> misma referencia ->
+  inventario nunca aplica dos veces el mismo ingreso.
+end note
+@enduml

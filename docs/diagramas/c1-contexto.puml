@@ -1,0 +1,36 @@
+@startuml c1-contexto
+' C4 - Nivel 1: Diagrama de Contexto de DepositoClick
+' (se puede renderizar en https://www.plantuml.com o con plantuml.jar)
+!pragma layout smetana
+!include <C4/C4_Context>
+
+LAYOUT_TOP_DOWN()
+title DepositoClick - C1 Diagrama de Contexto
+
+Person(admin, "Administrador", "ADMIN. Define rubros, categorias y articulos; da de alta depositos; hace ajustes por inventario fisico.")
+Person(compras, "Responsable de Compras", "COMPRAS. Gestiona proveedores, emite ordenes de compra y revisa la reposicion sugerida.")
+Person(operario, "Operario de deposito", "OPERARIO. Registra ingresos, egresos, transferencias y la recepcion de mercaderia.")
+Person(vendedor, "Vendedor / PoS", "VENDEDOR. Consulta stock y registra ventas desde el punto de venta.")
+
+System(depositoclick, "DepositoClick", "Backend de control de stock multi-rubro y multi-deposito: catalogo polimorfico, stock por lote y vencimiento (FEFO), compras y reposicion.")
+
+System_Ext(keycloak, "Keycloak (Identity Provider)", "Autentica a los usuarios (OIDC) y emite tokens JWT con sus roles.")
+System_Ext(nager, "Nager.Date API", "API publica de feriados nacionales de +100 paises.")
+System_Ext(argdatos, "ArgentinaDatos API", "API publica de feriados de Argentina (respaldo).")
+
+Rel(admin, keycloak, "Inicia sesion", "OIDC")
+Rel(compras, keycloak, "Inicia sesion", "OIDC")
+Rel(operario, keycloak, "Inicia sesion", "OIDC")
+Rel(vendedor, keycloak, "Inicia sesion", "OIDC")
+
+Rel(admin, depositoclick, "Administra catalogo y depositos", "HTTPS/JSON + JWT")
+Rel(compras, depositoclick, "Compra y repone", "HTTPS/JSON + JWT")
+Rel(operario, depositoclick, "Mueve stock y recibe mercaderia", "HTTPS/JSON + JWT")
+Rel(vendedor, depositoclick, "Vende y consulta stock", "HTTPS/JSON + JWT")
+
+Rel(depositoclick, keycloak, "Valida la firma de los JWT (claves publicas JWKS)", "HTTP")
+Rel(depositoclick, nager, "Obtiene feriados del pais del deposito", "HTTPS/JSON")
+Rel(depositoclick, argdatos, "Obtiene feriados de AR si Nager no responde", "HTTPS/JSON")
+
+SHOW_LEGEND()
+@enduml
