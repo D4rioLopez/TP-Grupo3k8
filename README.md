@@ -1,7 +1,6 @@
 # DepósitoClick — PoS
 
 Trabajo Práctico Integrador · Backend de Aplicaciones 2026 · UTN FRC
-400677 - Martino Lautaro Emanuel
 
 Backend de control de stock **multi-rubro y multi-depósito**: catálogo polimórfico (cada rubro define sus
 categorías y atributos), stock por lote y vencimiento con despacho FEFO, punto de venta, órdenes de compra
